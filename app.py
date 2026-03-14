@@ -90,6 +90,11 @@ def register_main_routes(app: Flask) -> None:
         """หน้าหลัก — serve touchscreen UI"""
         return render_template("index.html")
 
+    @app.route("/history")
+    def history_page():
+        """หน้า Admin — ดูประวัติการตรวจจับ"""
+        return render_template("history.html")
+
     @app.route("/favicon.ico")
     def favicon():
         """ป้องกัน 404 จาก browser request favicon"""
