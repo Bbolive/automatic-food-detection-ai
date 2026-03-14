@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<!--
+  templates/index.html
+  ────────────────────────────────────────────────────────
+  Touchscreen UI — 3 หน้าจอ
+    1. #home-screen   → กล้อง + upload + ปุ่มตรวจจับ
+    2. #result-screen → ภาพ annotated + ตารางราคา
+    3. #end-screen    → ขอบคุณ + countdown 5 วินาที
+
+  JS Logic อยู่ที่ static/main.js
+  CSS อยู่ที่ static/style.css
+
+  แก้ไขที่นี่เมื่อ:
+    - เพิ่ม/ลบ element ใน UI
+    - เปลี่ยนโครงสร้าง HTML
+  ────────────────────────────────────────────────────────
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ระบบตรวจจับอาหาร AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ── Loading Overlay ──────────────────────────────────── -->
+<div id="loading-overlay" aria-live="polite">
+  <div class="loader-ring"></div>
+  <div class="loader-text" id="loader-text">กำลังวิเคราะห์อาหาร...</div>
+</div>
+
+<!-- ── Toast Notification ───────────────────────────────── -->
+<div id="toast" role="alert"></div>
+
+
+<!-- ════════════════════════════════════════════════════════
+     HOME SCREEN
+════════════════════════════════════════════════════════ -->
+<div id="home-screen" class="screen active">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="2" width="20" height="20" rx="5"/>
+        <circle cx="12" cy="10" r="4"/>
+        <path d="M6 21c0-3.314 2.686-6 6-6s6 2.686 6 6"/>
+      </svg>
+      FOOD·AI
+    </div>
+    <!-- สถานะกล้อง: อัปเดตโดย JS -->
+    <div id="status-pill" class="status-pill off">
+      <span class="status-dot"></span>
+      <span id="status-text">กำลังตรวจสอบ...</span>
+    </div>
+    <time id="clock" class="topbar-time">--:--</time>
+  </header>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- Preview กล้อง / ภาพที่อัปโหลด -->
+    <section class="card" aria-label="ภาพอาหาร">
+      <div class="card-title">📷 ภาพอาหาร</div>
+      <div id="camera-preview">
+        <!-- แสดงเมื่อไม่มีภาพ -->
+        <div id="no-image-msg" class="no-image-msg">
+          <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <p>ใช้ปุ่มด้านล่างเพื่อเลือกภาพอาหาร</p>
+        </div>
+        <!-- ภาพ Preview (ซ่อนไว้ก่อน) -->
+        <img id="preview-img" src="" alt="ภาพอาหารที่เลือก" hidden>
+        <!-- Scanning animation overlay -->
+        <div class="preview-corners" aria-hidden="true">
+          <span class="corner tl"></span><span class="corner tr"></span>
+          <span class="corner bl"></span><span class="corner br"></span>
+          <div id="scan-line" class="scan-line" hidden></div>
+        </div>
+      </div>
+
+      <!-- ปุ่ม Upload (แสดงบน PC, ซ่อนได้บน Pi) -->
+      <div class="upload-row" id="upload-row">
+        <label class="btn-upload" for="file-input">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          แกลอรี
+        </label>
+        <label class="btn-upload" for="camera-input">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          ถ่ายภาพ
+        </label>
+      </div>
+      <!-- Hidden file inputs -->
+      <input type="file" id="file-input" accept="image/*" aria-label="เลือกภาพจากแกลอรี">
+      <input type="file" id="camera-input" accept="image/*" capture="environment" aria-label="ถ่ายภาพจากกล้อง">
+    </section>
+
+    <!-- น้ำหนัก -->
+    <section class="card" aria-label="น้ำหนักอาหาร">
+      <div class="card-title">⚖️ น้ำหนัก</div>
+      <div class="weight-row">
+        <div>
+          <div class="weight-label">น้ำหนักปัจจุบัน</div>
+          <span class="weight-value" id="weight-display">0.0</span>
+          <span class="weight-unit">กรัม</span>
+        </div>
+        <button class="btn-ghost" onclick="refreshWeight()" aria-label="รีเฟรชน้ำหนัก">
+          รีเฟรช
+        </button>
+      </div>
+    </section>
+
+    <!-- คำแนะนำ -->
+    <section class="card" aria-label="คำแนะนำการใช้งาน">
+      <div class="card-title">💡 คำแนะนำ</div>
+      <ol class="tips-list">
+        <li>วางอาหารบนจานที่สะอาด ให้เห็นชัดเจน</li>
+        <li>ตรวจสอบแสงสว่างเพียงพอ ไม่มีเงาบนอาหาร</li>
+        <li>วางอาหารให้ตรงกลางกรอบ มองเห็นได้ครบ</li>
+        <li>ระบบรองรับการตรวจจับหลายเมนูในภาพเดียว</li>
+      </ol>
+    </section>
+
+  </main>
+
+  <!-- Bottom Action Bar -->
+  <div class="action-bar">
+    <button id="detect-btn" class="btn-primary" onclick="startDetection()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <line x1="11" y1="8" x2="11" y2="14"/>
+        <line x1="8" y1="11" x2="14" y2="11"/>
+      </svg>
+      ตรวจจับอาหาร
+    </button>
+  </div>
+
+</div><!-- /home-screen -->
+
+
+<!-- ════════════════════════════════════════════════════════
+     RESULT SCREEN
+════════════════════════════════════════════════════════ -->
+<div id="result-screen" class="screen">
+
+  <header class="topbar">
+    <div class="topbar-logo">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="2" width="20" height="20" rx="5"/>
+        <circle cx="12" cy="10" r="4"/>
+        <path d="M6 21c0-3.314 2.686-6 6-6s6 2.686 6 6"/>
+      </svg>
+      FOOD·AI
+    </div>
+    <div class="status-pill on">
+      <span class="status-dot"></span>
+      ผลการตรวจจับ
+    </div>
+    <time id="clock2" class="topbar-time">--:--</time>
+  </header>
+
+  <main class="content">
+
+    <!-- ภาพที่วาด bounding box แล้ว -->
+    <figure id="result-image-wrap" aria-label="ภาพผลการตรวจจับ">
+      <img id="result-img" src="" alt="ผลการตรวจจับอาหาร">
+    </figure>
+
+    <!-- ตารางรายการอาหาร -->
+    <section class="card" aria-label="รายการอาหาร">
+      <div class="card-title">🍽️ รายการอาหารที่ตรวจพบ</div>
+      <table class="det-table" aria-label="รายการอาหาร">
+        <thead>
+          <tr>
+            <th scope="col">เมนู</th>
+            <th scope="col">ความแม่นยำ</th>
+            <th scope="col">น้ำหนัก</th>
+            <th scope="col">ราคา</th>
+          </tr>
+        </thead>
+        <tbody id="det-tbody">
+          <!-- เติมโดย JS: renderResult() ใน main.js -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ราคารวม -->
+    <div class="total-row" aria-label="ราคารวม">
+      <div>
+        <div class="total-label">ราคารวมทั้งหมด</div>
+        <div class="total-count" id="total-item-count"></div>
+      </div>
+      <div class="total-price-wrap">
+        <span class="total-currency">฿</span>
+        <span class="total-price" id="total-price-display">0</span>
+      </div>
+    </div>
+
+    <!-- ข้อมูล session -->
+    <div class="session-info" id="session-info" aria-label="ข้อมูล session"></div>
+
+  </main>
+
+  <div class="action-bar">
+    <button class="btn-primary" onclick="goToEnd()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      ยืนยัน / เสร็จสิ้น
+    </button>
+    <button class="btn-secondary" onclick="goHome()">ตรวจจับใหม่</button>
+  </div>
+
+</div><!-- /result-screen -->
+
+
+<!-- ════════════════════════════════════════════════════════
+     END SCREEN
+════════════════════════════════════════════════════════ -->
+<div id="end-screen" class="screen end-screen">
+  <div class="end-content">
+    <div class="end-icon-ring" aria-hidden="true">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </div>
+    <h1 class="end-title">ขอบคุณที่ใช้บริการ</h1>
+    <p class="end-sub">
+      การตรวจจับอาหารเสร็จสิ้นเรียบร้อยแล้ว<br>
+      ข้อมูลถูกบันทึกลงฐานข้อมูลแล้ว
+    </p>
+    <!-- Countdown ring — อัปเดตโดย JS: startCountdown() -->
+    <div class="countdown-wrap" aria-label="กลับหน้าหลักใน">
+      <svg width="80" height="80" viewBox="0 0 80 80">
+        <circle cx="40" cy="40" r="34" fill="none" stroke="var(--surface2)" stroke-width="4"/>
+        <circle id="countdown-circle" cx="40" cy="40" r="34" fill="none"
+          stroke="var(--accent)" stroke-width="4"
+          stroke-dasharray="213.6" stroke-dashoffset="0"
+          style="transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset 1s linear;"/>
+        <text id="countdown-num" x="40" y="46"
+          text-anchor="middle" fill="var(--accent)"
+          font-family="Space Mono" font-size="22">5</text>
+      </svg>
+      <p class="countdown-label">กลับสู่หน้าหลักใน</p>
+    </div>
+  </div>
+</div><!-- /end-screen -->
+
+
+<script src="/static/main.js"></script>
+</body>
+</html>
