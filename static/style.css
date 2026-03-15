@@ -549,7 +549,7 @@ body::before {
 
 #result-image-wrap img {
   width: 100%;
-  display: block;
+  display: inline-block;
   vertical-align: middle;
 }
 

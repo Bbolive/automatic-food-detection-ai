@@ -68,6 +68,12 @@
     "price": 30,
     "unit": "ชิ้น"
   },
+  "grilled_chicken": {
+    "name_th": "ไก่ย่าง",
+    "name_en": "Grilled Chicken",
+    "price": 30,
+    "unit": "ชิ้น"
+  },
   "fried_tofo": {
     "name_th": "เต้าหู้ทอด",
     "name_en": "Fried Tofu",
@@ -103,6 +109,12 @@
     "name_en": "Rice",
     "price": 10,
     "unit": "ทัพพี"
+  },
+  "basil_leaf": {
+    "name_th": "ใบกะเพรา",
+    "name_en": "Basil Leaf",
+    "price": 0,
+    "unit": "ส่วน"
   },
   "stir_fried_basil": {
     "name_th": "ผัดกะเพรา",
