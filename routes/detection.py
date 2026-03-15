@@ -65,22 +65,20 @@ def detect_food():
     if not result["success"]:
         return jsonify(result), 500
 
-    # อัปเดตน้ำหนักแต่ละ item ถ้ามีข้อมูล
-    if weight and result["detections"]:
+    # โหมดเมนูหลัก: ราคารวมเอาแค่เมนูหลัก, น้ำหนักแบ่งให้แต่ละเมนู (หรือ 0 ถ้าไม่ได้ชั่ง)
+    if result.get("menus"):
+        result["total_price"] = sum(m["price"] for m in result["menus"])
+        w = round(weight / len(result["menus"]), 1) if weight else 0.0
+        for m in result["menus"]:
+            m["weight"] = w
+    elif weight and result["detections"]:
         per_item = round(weight / len(result["detections"]), 1)
         for det in result["detections"]:
             det["weight"] = per_item
 
-    # บันทึกลง database
-    db_path    = current_app.config["DB_PATH"]
-    session_id = save_detection_record(
-        db_path=db_path,
-        image_path=filename,
-        detections=result["detections"],
-        total_price=result["total_price"],
-        weight=weight,
-    )
-    result["session_id"] = session_id
+    # ส่งข้อมูลให้ frontend ใช้ตอนกดยืนยัน (ยังไม่บันทึก DB)
+    result["image_filename"] = filename
+    result["weight"] = weight if weight else 0.0
 
     # แนบ annotated image เป็น base64 เพื่อแสดงใน browser
     annotated = Path(result.get("annotated_path", ""))
@@ -93,9 +91,54 @@ def detect_food():
     # ไม่ส่ง path ภายในเซิร์ฟเวอร์กลับไป
     result.pop("annotated_path", None)
 
-    logger.info("Detection done | session=%d | items=%d | total=%.0f",
-                session_id, len(result["detections"]), result["total_price"])
+    logger.info("Detection done | items=%d | total=%.0f (save on confirm)",
+                len(result["detections"]), result["total_price"])
     return jsonify(result)
+
+
+@detection_bp.route("/confirm", methods=["POST"])
+def confirm_and_save():
+    """
+    บันทึกผลการตรวจจับลง DB เมื่อผู้ใช้กดยืนยันหน้า result
+    วันที่เวลาที่บันทึก = created_at (datetime('now', 'localtime'))
+
+    JSON body:
+        image_filename (str)  — ชื่อไฟล์ภาพที่ upload ตอน detect
+        detections (array)    — รายการ detection จาก /api/detect
+        total_price (number)  — ราคารวม
+        weight (number)       — น้ำหนักกรัม (optional, default 0)
+    """
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Expect JSON body"}), 400
+
+    body = request.get_json(silent=True) or {}
+    image_filename = body.get("image_filename")
+    detections     = body.get("detections")
+    total_price    = body.get("total_price", 0)
+    weight         = body.get("weight", 0.0)
+
+    if not image_filename or not isinstance(detections, list):
+        return jsonify({"success": False, "error": "Missing image_filename or detections"}), 400
+
+    # ตรวจสอบว่าไฟล์มีอยู่ (ถูก upload จาก /api/detect)
+    image_path = UPLOAD_DIR / image_filename
+    if not image_path.is_file():
+        return jsonify({"success": False, "error": "Image file not found"}), 400
+
+    try:
+        db_path    = current_app.config["DB_PATH"]
+        session_id = save_detection_record(
+            db_path=db_path,
+            image_path=image_filename,
+            detections=detections,
+            total_price=float(total_price),
+            weight=float(weight),
+        )
+        logger.info("Confirmed and saved session %d at %s", session_id, "DB")
+        return jsonify({"success": True, "session_id": session_id})
+    except Exception as exc:
+        logger.exception("Confirm save failed")
+        return jsonify({"success": False, "error": str(exc)}), 500
 
 
 # ── Private helpers ────────────────────────────────────────

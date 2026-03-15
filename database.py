@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS detection_sessions (
     id            INTEGER  PRIMARY KEY AUTOINCREMENT,
     session_uuid  TEXT     NOT NULL UNIQUE,
     image_path    TEXT     NOT NULL,
-    created_at    TEXT     NOT NULL DEFAULT (datetime('now', 'localtime')),
+    created_at    TEXT     NOT NULL DEFAULT (datetime('now', 'localtime')),  -- วันที่เวลาที่บันทึก (เมื่อกดยืนยัน)
     total_price   REAL     NOT NULL DEFAULT 0.0,
     weight_grams  REAL     NOT NULL DEFAULT 0.0,
     item_count    INTEGER  NOT NULL DEFAULT 0,

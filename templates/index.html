@@ -19,9 +19,10 @@
   ────────────────────────────────────────────────────────
 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>ระบบตรวจจับอาหาร AI</title>
+<title>ระบบตรวจจับอาหารอัตโนมัติด้วย AI — Food Detection</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -44,12 +45,12 @@
   <!-- Top Bar -->
   <header class="topbar">
     <div class="topbar-logo">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="2" y="2" width="20" height="20" rx="5"/>
         <circle cx="12" cy="10" r="4"/>
         <path d="M6 21c0-3.314 2.686-6 6-6s6 2.686 6 6"/>
       </svg>
-      FOOD·AI
+      <span>FOOD·AI</span>
     </div>
     <!-- สถานะกล้อง: อัปเดตโดย JS -->
     <div id="status-pill" class="status-pill off">
@@ -64,24 +65,17 @@
 
     <!-- Preview กล้อง / ภาพที่อัปโหลด -->
     <section class="card" aria-label="ภาพอาหาร">
-      <div class="card-title">📷 ภาพอาหาร</div>
+      <h2 class="card-title">ภาพอาหาร</h2>
       <div id="camera-preview">
-        <!-- แสดงเมื่อไม่มีภาพ -->
+        <div id="scan-line" hidden aria-hidden="true"></div>
         <div id="no-image-msg" class="no-image-msg">
-          <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
             <circle cx="12" cy="13" r="4"/>
           </svg>
-          <p>ใช้ปุ่มด้านล่างเพื่อเลือกภาพอาหาร</p>
+          <p>ใช้ปุ่มด้านล่างเพื่อเลือกหรือถ่ายภาพอาหาร</p>
         </div>
-        <!-- ภาพ Preview (ซ่อนไว้ก่อน) -->
         <img id="preview-img" src="" alt="ภาพอาหารที่เลือก" hidden>
-        <!-- Scanning animation overlay -->
-        <div class="preview-corners" aria-hidden="true">
-          <span class="corner tl"></span><span class="corner tr"></span>
-          <span class="corner bl"></span><span class="corner br"></span>
-          <div id="scan-line" class="scan-line" hidden></div>
-        </div>
       </div>
 
       <!-- ปุ่ม Upload (แสดงบน PC, ซ่อนได้บน Pi) -->
@@ -109,7 +103,7 @@
 
     <!-- น้ำหนัก -->
     <section class="card" aria-label="น้ำหนักอาหาร">
-      <div class="card-title">⚖️ น้ำหนัก</div>
+      <h2 class="card-title">น้ำหนัก</h2>
       <div class="weight-row">
         <div>
           <div class="weight-label">น้ำหนักปัจจุบัน</div>
@@ -124,7 +118,7 @@
 
     <!-- คำแนะนำ -->
     <section class="card" aria-label="คำแนะนำการใช้งาน">
-      <div class="card-title">💡 คำแนะนำ</div>
+      <h2 class="card-title">คำแนะนำการใช้งาน</h2>
       <ol class="tips-list">
         <li>วางอาหารบนจานที่สะอาด ให้เห็นชัดเจน</li>
         <li>ตรวจสอบแสงสว่างเพียงพอ ไม่มีเงาบนอาหาร</li>
@@ -137,8 +131,8 @@
 
   <!-- Bottom Action Bar -->
   <div class="action-bar">
-    <button id="detect-btn" class="btn-primary" onclick="startDetection()">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+    <button id="detect-btn" class="btn-primary" onclick="startDetection()" aria-label="เริ่มตรวจจับอาหารจากภาพ">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"/>
         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
         <line x1="11" y1="8" x2="11" y2="14"/>
@@ -158,18 +152,18 @@
 
   <header class="topbar">
     <div class="topbar-logo">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <rect x="2" y="2" width="20" height="20" rx="5"/>
         <circle cx="12" cy="10" r="4"/>
         <path d="M6 21c0-3.314 2.686-6 6-6s6 2.686 6 6"/>
       </svg>
-      FOOD·AI
+      <span>FOOD·AI</span>
     </div>
     <div class="status-pill on">
       <span class="status-dot"></span>
       ผลการตรวจจับ
     </div>
-    <time id="clock2" class="topbar-time">--:--</time>
+    <time id="clock2" class="topbar-time" datetime="">--:--</time>
   </header>
 
   <main class="content">
@@ -180,8 +174,8 @@
     </figure>
 
     <!-- ตารางรายการอาหาร -->
-    <section class="card" aria-label="รายการอาหาร">
-      <div class="card-title">🍽️ รายการอาหารที่ตรวจพบ</div>
+    <section class="card" aria-label="รายการอาหารที่ตรวจพบ">
+      <h2 class="card-title">รายการอาหารที่ตรวจพบ</h2>
       <table class="det-table" aria-label="รายการอาหาร">
         <thead>
           <tr>
@@ -215,13 +209,13 @@
   </main>
 
   <div class="action-bar">
-    <button class="btn-primary" onclick="goToEnd()">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+    <button class="btn-primary" onclick="goToEnd()" aria-label="ยืนยันและเสร็จสิ้น">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="20 6 9 17 4 12"/>
       </svg>
       ยืนยัน / เสร็จสิ้น
     </button>
-    <button class="btn-secondary" onclick="goHome()">ตรวจจับใหม่</button>
+    <button class="btn-secondary" onclick="goHome()" aria-label="กลับไปตรวจจับใหม่">ตรวจจับใหม่</button>
   </div>
 
 </div><!-- /result-screen -->

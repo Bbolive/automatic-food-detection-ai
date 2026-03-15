@@ -169,13 +169,15 @@ class FoodDetector:
                 self._draw_box_pil(pil_img, det, i)
 
             annotated_path = self._save_annotated_pil(pil_img, image_path)
-            return {
+            out = {
                 "success":        True,
                 "detections":     detections,
                 "total_price":    sum(d["price"] for d in detections),
                 "annotated_path": annotated_path,
                 "mock":           False,
             }
+            out["menus"] = self._build_menus_hierarchy(detections)
+            return out
         except Exception as exc:
             logger.exception("YOLO detection error")
             return {"success": False, "error": str(exc)}
@@ -215,13 +217,103 @@ class FoodDetector:
             self._draw_box_pil(pil_img, det, i)
 
         annotated_path = self._save_annotated_pil(pil_img, image_path)
-        return {
+        out = {
             "success":        True,
             "detections":     detections,
             "total_price":    sum(d["price"] for d in detections),
             "annotated_path": annotated_path,
             "mock":           True,
         }
+        out["menus"] = self._build_menus_hierarchy(detections)
+        return out
+
+    # ── Menu hierarchy (เมนูหลัก + วัตถุดิบจาก bbox) ─────
+
+    @staticmethod
+    def _bbox_area(b: dict) -> float:
+        w = max(0, b.get("x2", 0) - b.get("x1", 0))
+        h = max(0, b.get("y2", 0) - b.get("y1", 0))
+        return w * h
+
+    @staticmethod
+    def _bbox_center(b: dict) -> tuple[float, float]:
+        x1, y1 = b.get("x1", 0), b.get("y1", 0)
+        x2, y2 = b.get("x2", 0), b.get("y2", 0)
+        return ((x1 + x2) / 2, (y1 + y2) / 2)
+
+    @classmethod
+    def _build_menus_hierarchy(cls, detections: list[dict]) -> list[dict]:
+        """
+        จัดกลุ่ม detection เป็นเมนูหลัก + วัตถุดิบ จาก bbox
+        - bbox ที่มี bbox อื่นอยู่ภายใน = เมนูหลัก
+        - bbox ที่อยู่ภายในเมนูหลัก = วัตถุดิบของเมนูนั้น
+        รองรับหลายจาน (หลายเมนู) ในภาพเดียว
+        """
+        if not detections:
+            return []
+
+        # หา parent ของแต่ละตัว: detection ที่มีพื้นที่ใหญ่กว่าและครอบ center ของตัวนี้
+        def contains(outer: dict, inner: dict) -> bool:
+            ob = outer.get("bbox") or {}
+            ib = inner.get("bbox") or {}
+            cx, cy = cls._bbox_center(ib)
+            x1, y1 = ob.get("x1", 0), ob.get("y1", 0)
+            x2, y2 = ob.get("x2", 0), ob.get("y2", 0)
+            if x1 >= x2 or y1 >= y2:
+                return False
+            return x1 <= cx <= x2 and y1 <= cy <= y2
+
+        # parent[i] = index ของ detection ที่เป็น parent ของ detections[i] (หรือ None ถ้าเป็นเมนูหลัก)
+        parent_idx = [None] * len(detections)
+        areas = [cls._bbox_area(d.get("bbox") or {}) for d in detections]
+
+        for i, det in enumerate(detections):
+            candidates = [
+                j for j in range(len(detections))
+                if j != i and areas[j] > areas[i] and contains(detections[j], det)
+            ]
+            if candidates:
+                # เลือก parent ที่เล็กที่สุดที่ยังครอบได้ (เมนูที่ใกล้ที่สุด)
+                parent_idx[i] = min(candidates, key=lambda j: areas[j])
+
+        # เมนูหลัก = ไม่มี parent
+        root_indices = [i for i in range(len(detections)) if parent_idx[i] is None]
+        # เรียงตามตำแหน่งบนภาพ (y แล้ว x)
+        root_indices.sort(
+            key=lambda i: (
+                (detections[i].get("bbox") or {}).get("y1", 0),
+                (detections[i].get("bbox") or {}).get("x1", 0),
+            )
+        )
+
+        menus = []
+        for ri in root_indices:
+            det = detections[ri]
+            children = [j for j in range(len(detections)) if parent_idx[j] == ri]
+            ingredients = [
+                {
+                    "name": detections[j].get("name", ""),
+                    "name_th": detections[j].get("name_th", ""),
+                    "name_en": detections[j].get("name_en", ""),
+                    "confidence": detections[j].get("confidence", 0),
+                    "price": 0,  # ราคาวัตถุดิบไม่นำมารวม
+                }
+                for j in children
+            ]
+            # ความแม่นยำเมนูหลัก = ค่าเฉลี่ยของเมนู + วัตถุดิบ
+            confs = [det.get("confidence", 0)] + [detections[j].get("confidence", 0) for j in children]
+            accuracy_avg = sum(confs) / len(confs) if confs else 0
+            menus.append({
+                "name": det.get("name", ""),
+                "name_th": det.get("name_th", det.get("name", "")),
+                "name_en": det.get("name_en", ""),
+                "confidence": det.get("confidence", 0),
+                "accuracy_avg": round(accuracy_avg, 3),
+                "price": det.get("price", 0),
+                "weight": det.get("weight", 0.0),
+                "ingredients": ingredients,
+            })
+        return menus
 
     # ── Drawing (Pillow — รองรับภาษาไทย) ─────────────────
 
