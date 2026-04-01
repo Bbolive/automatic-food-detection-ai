@@ -165,46 +165,105 @@ function _onFile(e) {
 }
 $("file-input")?.addEventListener("change", _onFile);
 $("camera-input")?.addEventListener("change", _onFile);
+/* ── Pi Camera Capture ───────────────────────── */
+
+async function captureFromPi() {
+
+  showLoading(true, "กำลังถ่ายภาพ...");
+
+  try {
+    const res = await fetch("/api/capture", {
+      method: "POST"
+    });
+
+    const data = await res.json();
+
+    if (!data.success)
+      throw new Error(data.error || "Camera error");
+
+    const img = $("preview-img");
+
+    img.src = data.image_url + "?t=" + Date.now();
+    img.hidden = false;
+
+    setHidden("no-image-msg", true);
+
+    // ⭐ สำคัญมาก
+    currentFile = null;
+    window.piCapturedFilename = data.filename;
+
+    showToast("ถ่ายภาพสำเร็จ", "success");
+
+  } catch (err) {
+    console.error(err);
+    showToast("กล้องไม่พร้อม", "error");
+  }
+
+  showLoading(false);
+}
 
 /* ── Detection ────────────────────────────────────────── */
 async function startDetection() {
-  if (!currentFile) {
-    showToast("กรุณาเลือกภาพก่อน", "error");
-    return;
-  }
+
   const btn = $("detect-btn");
   if (btn) btn.disabled = true;
-  showLoading(true);
-  try {
-    const form = new FormData();
-    form.append("image", currentFile);
-    form.append("weight", $("weight-display")?.textContent || "0");
-    const res = await fetch(`${API_BASE}/api/detect`, {
-      method: "POST",
-      body: form,
-    });
-    const data = await res.json().catch(() => {
-      throw new Error("JSON parse error");
-    });
-    if (!res.ok || !data.success)
-      throw new Error(data?.error || `HTTP ${res.status}`);
 
-    // เก็บผลรอ confirm
+  showLoading(true);
+
+  try {
+
+    let res;
+
+    /* ===== CASE 1 : Pi Camera ===== */
+    if (window.piCapturedFilename) {
+
+      res = await fetch("/api/detect-captured", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: window.piCapturedFilename
+        }),
+      });
+
+    }
+    /* ===== CASE 2 : Upload ===== */
+    else if (currentFile) {
+
+      const form = new FormData();
+      form.append("image", currentFile);
+      form.append("weight", $("weight-display")?.textContent || "0");
+
+      res = await fetch("/api/detect", {
+        method: "POST",
+        body: form,
+      });
+
+    } else {
+      showToast("ยังไม่มีภาพ", "error");
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success)
+      throw new Error(data.error || "Detection failed");
+
     lastDetectionResult = {
       pending_file: data.pending_file || "",
-      dishes: data.dishes || data.detections || [],
+      dishes: data.dishes || [],
       total_price: data.total_price || 0,
     };
 
     renderResult(data);
     showScreen("result-screen");
+
   } catch (err) {
-    console.error("Detection error:", err);
-    showToast(`❌ ${err.message}`, "error");
-  } finally {
-    showLoading(false);
-    if (btn) btn.disabled = false;
+    console.error(err);
+    showToast("❌ " + err.message, "error");
   }
+
+  showLoading(false);
+  if (btn) btn.disabled = false;
 }
 
 /* ── Render result ────────────────────────────────────── */

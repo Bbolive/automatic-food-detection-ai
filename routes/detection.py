@@ -193,3 +193,46 @@ def _get_weight_from_request() -> float:
     except (TypeError, ValueError):
         pass
     return 0.0
+
+# ─────────────────────────────────────────────
+# Pi Camera Capture
+# ─────────────────────────────────────────────
+
+@detection_bp.route("/capture", methods=["POST"])
+def capture_from_pi():
+    """
+    POST /api/capture
+
+    ใช้ Raspberry Pi Camera ถ่ายภาพจริง
+    """
+
+    camera = current_app.camera   # ← สำคัญ
+
+    if not camera or not camera.is_active:
+        return jsonify({
+            "success": False,
+            "error": "Camera not active"
+        }), 400
+
+    try:
+        path = camera.capture()
+
+        if not path:
+            raise RuntimeError("Capture returned None")
+
+        filename = Path(path).name
+
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "image_url": f"/uploads/{filename}"
+        })
+
+    except Exception as exc:
+        logger.exception("Pi capture failed")
+        return jsonify({
+            "success": False,
+            "error": str(exc)
+        }), 500
+        
+    

@@ -24,12 +24,15 @@ from config import ServerConfig, DB_PATH, UPLOAD_DIR
 from database import init_db
 from detector import FoodDetector
 from utils import setup_logging, cleanup_old_files
+from hardware.camera import PiCamera
+
 
 # Blueprints
 from routes.detection import detection_bp
 from routes.weight    import weight_bp
 from routes.history   import history_bp
 from routes.status    import status_bp
+from routes.camera import camera_bp
 
 # ── ตั้งค่า Logging ────────────────────────────────────────
 setup_logging("food_ai")
@@ -60,12 +63,17 @@ def create_app() -> Flask:
     # ── สร้าง Detector ─────────────────────────────────────
     # เก็บ instance เดียวใน app context เพื่อประหยัด memory
     app.detector = FoodDetector()
+    
+        # ── Camera Service ─────────────────────
+    app.camera = PiCamera()
 
     # ── ลงทะเบียน Blueprints ──────────────────────────────
     app.register_blueprint(status_bp)
     app.register_blueprint(detection_bp)
     app.register_blueprint(weight_bp)
     app.register_blueprint(history_bp)
+    app.register_blueprint(camera_bp)
+
 
     # ── Routes หลัก (/, /favicon.ico) ────────────────────
     register_main_routes(app)
