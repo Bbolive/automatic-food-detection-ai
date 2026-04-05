@@ -1,16 +1,5 @@
 /**
  * main.js — Food AI Touchscreen UI (800×480)
- *
- * IDs ที่ใช้ (ตรงกับ index.html):
- *   home-screen, result-screen, end-screen
- *   status-camera-text, status-camera-dot
- *   camera-box, no-image-msg, preview-img, scan-line
- *   upload-row, file-input, camera-input
- *   weight-display, detect-btn
- *   result-img, menu-list
- *   total-price-display, session-info
- *   countdown-circle, countdown-num
- *   loading-overlay, loader-text, toast
  */
 "use strict";
 
@@ -22,6 +11,9 @@ const WEIGHT_POLL_MS = 5000;
 let currentFile = null;
 let lastDetectionResult = null;
 let countdownTimer = null;
+
+// ── เปลี่ยน: ใช้ var เพื่อให้เข้าถึงได้จากทุก scope ──────
+var piCapturedFilename = null;
 
 /* ── Helpers ──────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
@@ -49,6 +41,7 @@ function showScreen(id) {
 function goHome() {
   clearTimeout(countdownTimer);
   lastDetectionResult = null;
+  piCapturedFilename = null; // ── เพิ่ม: reset filename
   _resetHome();
   showScreen("home-screen");
 }
@@ -59,7 +52,6 @@ async function goToEnd() {
     startCountdown(COUNTDOWN_SEC);
     return;
   }
-
   showLoading(true, "กำลังบันทึกข้อมูล...");
   try {
     const res = await fetch(`${API_BASE}/api/confirm`, {
@@ -85,7 +77,6 @@ async function goToEnd() {
   } finally {
     showLoading(false);
   }
-
   lastDetectionResult = null;
   showScreen("end-screen");
   startCountdown(COUNTDOWN_SEC);
@@ -93,34 +84,26 @@ async function goToEnd() {
 
 function _resetHome() {
   currentFile = null;
-  const pi = $("preview-img");
-  if (pi) {
-    pi.src = "";
-    pi.hidden = true;
+  const img = $("preview-img");
+  if (img) {
+    // ── เปลี่ยน: คืน live stream แทนการ clear ─────────
+    img.src = "/video_feed";
+    img.hidden = false;
   }
-  setHidden("no-image-msg", false);
+  setHidden("no-image-msg", true);
   setHidden("scan-line", true);
-  const fi = $("file-input"),
-    ci = $("camera-input");
+  const fi = $("file-input");
   if (fi) fi.value = "";
-  if (ci) ci.value = "";
 }
-
-/* ── Clock ────────────────────────────────────────────── */
-// (ไม่มี clock element ใน mockup ใหม่ — skip)
 
 /* ── Camera status ────────────────────────────────────── */
 async function checkStatus() {
   try {
     const d = await _get("/api/status");
     const isActive = d.data?.camera_active;
-
     setText("status-camera-text", isActive ? "พร้อมใช้งาน" : "ไม่พบกล้อง");
-
     const dot = $("status-camera-dot");
     if (dot) dot.className = isActive ? "dot dot-on" : "dot dot-off";
-
-    // ซ่อน upload buttons บน Pi ที่มีกล้องจริง
     setStyle("upload-row", "display", isActive ? "none" : "grid");
   } catch {
     setText("status-camera-text", "ออฟไลน์");
@@ -164,46 +147,39 @@ function _onFile(e) {
   reader.readAsDataURL(file);
 }
 $("file-input")?.addEventListener("change", _onFile);
-$("camera-input")?.addEventListener("change", _onFile);
-/* ── Pi Camera Capture ───────────────────────── */
 
+/* ── Pi Camera Capture ────────────────────────────────── */
 async function captureFromPi() {
-
-  showLoading(true, "กำลังถ่ายภาพ...");
+  console.log("📸 เริ่มสั่งถ่ายภาพ..."); // ── เพิ่ม
+  showLoading(true, "กำลังบันทึกภาพจากกล้อง..."); // ── เปลี่ยน text
 
   try {
-    const res = await fetch("/api/capture", {
-      method: "POST"
-    });
-
+    const res = await fetch("/api/capture", { method: "POST" });
     const data = await res.json();
 
-    if (!data.success)
-      throw new Error(data.error || "Camera error");
+    if (!data.success) throw new Error(data.error || "Camera error");
 
     const img = $("preview-img");
-
-    img.src = data.image_url + "?t=" + Date.now();
+    // ── เพิ่ม cache-bust ด้วย new Date() ─────────────
+    img.src = data.image_url + "?t=" + new Date().getTime();
     img.hidden = false;
-
     setHidden("no-image-msg", true);
 
-    // ⭐ สำคัญมาก
     currentFile = null;
-    window.piCapturedFilename = data.filename;
+    piCapturedFilename = data.filename; // ── เปลี่ยน: var แทน window.
 
-    showToast("ถ่ายภาพสำเร็จ", "success");
-
+    console.log("✅ ถ่ายสำเร็จ ไฟล์ชื่อ:", piCapturedFilename); // ── เพิ่ม
+    showToast("📸 ถ่ายภาพสำเร็จ! ตรวจสอบภาพแล้วกดเริ่มตรวจจับ", "success"); // ── เปลี่ยน text
   } catch (err) {
-    console.error(err);
-    showToast("กล้องไม่พร้อม", "error");
+    console.error("Capture Error:", err);
+    showToast("❌ เชื่อมต่อกล้องไม่ได้", "error");
   }
-
   showLoading(false);
 }
 
 /* ── Detection ────────────────────────────────────────── */
 async function startDetection() {
+  console.log("🚀 กำลังส่งภาพไปวิเคราะห์ AI..."); // ── เพิ่ม
 
   const btn = $("detect-btn");
   if (btn) btn.disabled = true;
@@ -211,40 +187,33 @@ async function startDetection() {
   showLoading(true);
 
   try {
-
     let res;
 
     /* ===== CASE 1 : Pi Camera ===== */
-    if (window.piCapturedFilename) {
-
+    if (piCapturedFilename) {
       res = await fetch("/api/detect-captured", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: window.piCapturedFilename
-        }),
+        body: JSON.stringify({ filename: piCapturedFilename }),
       });
 
-    }
-    /* ===== CASE 2 : Upload ===== */
-    else if (currentFile) {
-
+      /* ===== CASE 2 : File Upload ===== */
+    } else if (currentFile) {
       const form = new FormData();
       form.append("image", currentFile);
       form.append("weight", $("weight-display")?.textContent || "0");
+      res = await fetch("/api/detect", { method: "POST", body: form });
 
-      res = await fetch("/api/detect", {
-        method: "POST",
-        body: form,
-      });
-
+      /* ===== CASE 3 : ยังไม่มีภาพ ===== */
     } else {
-      showToast("ยังไม่มีภาพ", "error");
+      // ── เปลี่ยน: ข้อความ error ชัดขึ้น ──────────────
+      showToast("⚠️ ต้องถ่ายภาพก่อนเริ่มตรวจจับครับ", "error");
+      showLoading(false);
+      if (btn) btn.disabled = false;
       return;
     }
 
     const data = await res.json();
-
     if (!res.ok || !data.success)
       throw new Error(data.error || "Detection failed");
 
@@ -256,9 +225,8 @@ async function startDetection() {
 
     renderResult(data);
     showScreen("result-screen");
-
   } catch (err) {
-    console.error(err);
+    console.error("Detection Error:", err);
     showToast("❌ " + err.message, "error");
   }
 
@@ -267,18 +235,15 @@ async function startDetection() {
 }
 
 /* ── Render result ────────────────────────────────────── */
-
-// สีสำหรับ menu cards (ตาม mockup: purple, pink, blue, teal ...)
 const CARD_COLORS = [
-  { bg: "#6d28d9", border: "#7c3aed" }, // purple
-  { bg: "#be185d", border: "#db2777" }, // pink
-  { bg: "#1d4ed8", border: "#2563eb" }, // blue
-  { bg: "#0f766e", border: "#0d9488" }, // teal
-  { bg: "#9a3412", border: "#c2410c" }, // orange-dark
+  { bg: "#6d28d9", border: "#7c3aed" },
+  { bg: "#be185d", border: "#db2777" },
+  { bg: "#1d4ed8", border: "#2563eb" },
+  { bg: "#0f766e", border: "#0d9488" },
+  { bg: "#9a3412", border: "#c2410c" },
 ];
 
 function renderResult(data) {
-  // ── Annotated image ──────────────────────────────────
   const ri = $("result-img");
   if (ri) {
     ri.src =
@@ -286,8 +251,6 @@ function renderResult(data) {
       (currentFile ? URL.createObjectURL(currentFile) : "");
   }
 
-  // ── Build dishes array ───────────────────────────────
-  // รองรับทั้ง data.dishes (จาก detector ใหม่) และ data.menus / data.detections (เก่า)
   let dishes = [];
   if (Array.isArray(data.dishes) && data.dishes.length > 0) {
     dishes = data.dishes;
@@ -310,23 +273,17 @@ function renderResult(data) {
     }));
   }
 
-  // ── Render menu cards ────────────────────────────────
   const list = $("menu-list");
   if (!list) {
     console.error("#menu-list not found");
     return;
   }
 
-  if (dishes.length === 0) {
-    list.innerHTML = `
-      <div style="text-align:center;padding:20px;color:#64748b;font-size:.8rem">
-        ไม่พบรายการอาหาร
-      </div>`;
-  } else {
-    list.innerHTML = dishes.map((dish, i) => _menuCardHTML(dish, i)).join("");
-  }
+  list.innerHTML =
+    dishes.length === 0
+      ? `<div style="text-align:center;padding:20px;color:#64748b;font-size:.8rem">ไม่พบรายการอาหาร</div>`
+      : dishes.map((dish, i) => _menuCardHTML(dish, i)).join("");
 
-  // ── Total price ──────────────────────────────────────
   const total =
     data.total_price || dishes.reduce((s, d) => s + (d.price || 0), 0);
   setText("total-price-display", Math.round(total));
@@ -337,26 +294,21 @@ function _menuCardHTML(dish, i) {
   const wt = (dish.weight || 0) > 0 ? `${Math.round(dish.weight)} กรัม` : "—";
   const ings = Array.isArray(dish.ingredients) ? dish.ingredients : [];
 
-  const ingHTML =
-    ings.length > 0
-      ? ings
-          .map((ing) => {
-            const pct = Math.round((ing.confidence || 0) * 100);
-            return `
-          <div class="detail-item">
-            <span>- ${ing.name_th || ing.name}</span>
-            <span class="detail-conf">${pct}%</span>
-          </div>`;
-          })
-          .join("")
-      : "";
+  const ingHTML = ings
+    .map((ing) => {
+      const pct = Math.round((ing.confidence || 0) * 100);
+      return `
+      <div class="detail-item">
+        <span>- ${ing.name_th || ing.name}</span>
+        <span class="detail-conf">${pct}%</span>
+      </div>`;
+    })
+    .join("");
 
   const hasDetail = ings.length > 0;
-
   return `
     <div class="menu-card" id="mcard-${i}" style="background:${c.bg};border:2px solid ${c.border}">
-      <div class="menu-card-main"
-           onclick="${hasDetail ? `toggleMenuCard(${i})` : ""}">
+      <div class="menu-card-main" onclick="${hasDetail ? `toggleMenuCard(${i})` : ""}">
         <span class="menu-card-name">${dish.name_th || dish.name || "—"}</span>
         <span class="menu-card-weight">${wt}</span>
         <span class="menu-card-price">฿${Math.round(dish.price || 0)} บาท</span>
@@ -388,9 +340,9 @@ function toggleMenuCard(i) {
 /* ── Countdown ────────────────────────────────────────── */
 function startCountdown(sec) {
   clearTimeout(countdownTimer);
+  // ── circle เป็น null ได้ (HTML ใหม่ใช้ h1 แทน SVG) ──
   const circle = $("countdown-circle");
-  const num = $("countdown-num");
-  const total = 188.5; // 2π × 30
+  const total = 188.5;
   let n = sec;
   (function tick() {
     setText("countdown-num", n);
@@ -405,7 +357,8 @@ function startCountdown(sec) {
 
 /* ── Toast ────────────────────────────────────────────── */
 let _tt = null;
-function showToast(msg, type = "", ms = 2600) {
+function showToast(msg, type = "", ms = 3000) {
+  // ── เปลี่ยน: 2600 → 3000
   const el = $("toast");
   if (!el) return;
   clearTimeout(_tt);
@@ -430,3 +383,16 @@ async function _get(path) {
   if (!r.ok) throw new Error(`${path} → ${r.status}`);
   return r.json();
 }
+
+/* ── Init ─────────────────────────────────────────────── */
+// ── เพิ่ม: force-show elements และ log พร้อมใช้งาน ──────
+window.onload = () => {
+  console.log("✅ ระบบหน้าจอพร้อมใช้งาน");
+  const uploadRow = $("upload-row");
+  if (uploadRow) uploadRow.style.setProperty("display", "flex", "important");
+  const detectBtn = $("detect-btn");
+  if (detectBtn) {
+    detectBtn.style.display = "block";
+    detectBtn.disabled = false;
+  }
+};
