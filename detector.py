@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from ultralytics import YOLO                              # ← ต้องติดตั้ง pip install ultralytics
+from ultralytics import YOLO
 
 from config import MODEL_PATH, UPLOAD_DIR, DetectionConfig, MENU_PATH
 from utils import load_menu
@@ -31,12 +31,12 @@ logger = logging.getLogger(__name__)
 
 # ── สีของ bounding box (RGB สำหรับ Pillow) ────────────────
 BOX_COLORS_RGB = [
-    (0,  229, 160),   # เขียว
-    (0,  153, 255),   # น้ำเงิน
-    (255, 107,  53),  # ส้ม
+    (0, 229, 160),  # เขียว
+    (0, 153, 255),  # น้ำเงิน
+    (255, 107, 53),  # ส้ม
     (176, 106, 255),  # ม่วง
-    (255, 210,  63),  # เหลือง
-    (53,  211, 255),  # ฟ้า
+    (255, 210, 63),  # เหลือง
+    (53, 211, 255),  # ฟ้า
 ]
 
 # ── ฟอนต์ภาษาไทย ──────────────────────────────────────────
@@ -57,6 +57,7 @@ _FONT_CANDIDATES = [
     "C:/Windows/Fonts/arial.ttf",
 ]
 
+
 def _find_thai_font(size: int = 18) -> ImageFont.FreeTypeFont:
     """หาฟอนต์ที่รองรับภาษาไทย คืน default ถ้าไม่พบ"""
     for path in _FONT_CANDIDATES:
@@ -74,22 +75,31 @@ class FoodDetector:
     """ตรวจจับอาหารจากภาพด้วย YOLOv8"""
 
     def __init__(self):
-        self.menu         = load_menu(MENU_PATH)
-        self.model        = self._load_model()
-        self._is_pi       = self._detect_raspberry_pi()
-        self._font_label  = _find_thai_font(size=22)
-        self._font_small  = _find_thai_font(size=14)
-        logger.info("FoodDetector ready | pi=%s", self._is_pi)
+        self.menu = load_menu(MENU_PATH)
+        self.model = self._load_model()  # ← try/except แทน raise
+        self._is_pi = self._detect_raspberry_pi()
+        self._font_label = _find_thai_font(size=22)
+        self._font_small = _find_thai_font(size=14)
+        logger.info(
+            "FoodDetector ready | pi=%s | model=%s",
+            self._is_pi,
+            "loaded" if self.model else "NOT FOUND",
+        )
 
-    # ── Initialisation ────────────────────────────────────
+    # ── Initialisation ─────────────────────────────────────
 
-    def _load_model(self) -> YOLO:
-        """โหลด YOLOv8 model — raise ถ้าไม่พบไฟล์"""
-        if not MODEL_PATH.exists():
-            raise FileNotFoundError(f"best.pt not found at {MODEL_PATH}")
-        model = YOLO(str(MODEL_PATH))
-        logger.info("YOLOv8 loaded: %s", MODEL_PATH)
-        return model
+    def _load_model(self) -> YOLO | None:
+        """โหลด YOLOv8 model — คืน None แทน raise ถ้าไม่พบไฟล์"""
+        try:
+            if not MODEL_PATH.exists():
+                logger.error("Model file NOT FOUND at %s", MODEL_PATH)
+                return None
+            model = YOLO(str(MODEL_PATH))
+            logger.info("YOLOv8 loaded: %s", MODEL_PATH)
+            return model
+        except Exception as e:
+            logger.error("Failed to load YOLO model: %s", e)
+            return None
 
     def _detect_raspberry_pi(self) -> bool:
         try:
@@ -97,55 +107,59 @@ class FoodDetector:
         except Exception:
             return False
 
-    # ── Public API ────────────────────────────────────────
+    # ── Public API ─────────────────────────────────────────
 
     def get_status(self) -> dict:
         """คืนสถานะ — ใช้โดย status_bp"""
         return {
-            "model_loaded":    self.model is not None,
+            "model_loaded": self.model is not None,
             "is_raspberry_pi": self._is_pi,
-            "platform":        "Raspberry Pi 5" if self._is_pi else "Development PC",
-            "mode":            "yolo",
+            "platform": "Raspberry Pi 5" if self._is_pi else "Development PC",
+            "mode": "yolo",
         }
 
     def detect(self, image_path: str) -> dict:
         if not Path(image_path).exists():
             return {"success": False, "error": f"Image not found: {image_path}"}
+        if self.model is None:  # ← guard จากโค้ดใหม่
+            return {"success": False, "error": "Model not initialized"}
         return self._detect_yolo(image_path)
 
-    # ── YOLO Detection ────────────────────────────────────
+    # ── YOLO Detection ─────────────────────────────────────
 
     def _detect_yolo(self, image_path: str) -> dict:
         try:
-            results = self.model.predict(                 # ← เปลี่ยนจาก model() เป็น model.predict()
+            results = self.model.predict(
                 image_path,
                 conf=DetectionConfig.CONFIDENCE,
                 iou=DetectionConfig.IOU_THRESHOLD,
                 imgsz=DetectionConfig.IMG_SIZE,
                 max_det=DetectionConfig.MAX_DETECTIONS,
-                device="cpu",                             # ← เพิ่ม device="cpu"
+                device="cpu",
             )[0]
 
-            pil_img    = Image.open(image_path).convert("RGB")
+            pil_img = Image.open(image_path).convert("RGB")
             detections = []
 
             for i, box in enumerate(results.boxes):
-                cls_id   = int(box.cls[0])
-                conf     = float(box.conf[0])
+                cls_id = int(box.cls[0])
+                conf = float(box.conf[0])
                 label_en = results.names[cls_id]
-                b        = box.xyxy[0].cpu().numpy()      # ← .cpu().numpy() ตามโค้ดใหม่
+                b = box.xyxy[0].cpu().numpy()
 
                 item = self.menu.get(label_en, self.menu.get("unknown", {}))
                 det = {
-                    "name":       label_en,
-                    "name_th":    item.get("name_th", label_en),
-                    "name_en":    item.get("name_en", label_en),
+                    "name": label_en,
+                    "name_th": item.get("name_th", label_en),
+                    "name_en": item.get("name_en", label_en),
                     "confidence": round(conf, 2),
-                    "price":      item.get("price", 0),
-                    "weight":     0.0,
-                    "bbox":       {
-                        "x1": int(b[0]), "y1": int(b[1]),
-                        "x2": int(b[2]), "y2": int(b[3]),
+                    "price": item.get("price", 0),
+                    "weight": 0.0,
+                    "bbox": {
+                        "x1": int(b[0]),
+                        "y1": int(b[1]),
+                        "x2": int(b[2]),
+                        "y2": int(b[3]),
                     },
                 }
                 detections.append(det)
@@ -153,12 +167,12 @@ class FoodDetector:
 
             annotated_path = self._save_annotated_pil(pil_img, image_path)
             out = {
-                "success":        True,
-                "detections":     detections,
-                "total_price":    sum(d["price"] for d in detections),
+                "success": True,
+                "detections": detections,
+                "total_price": sum(d["price"] for d in detections),
                 "annotated_path": annotated_path,
-                "count":          len(detections),
-                "mock":           False,
+                "count": len(detections),
+                "mock": False,
             }
             out["menus"] = self._build_menus_hierarchy(detections)
             return out
@@ -167,7 +181,7 @@ class FoodDetector:
             logger.exception("YOLO detection error")
             return {"success": False, "error": str(exc)}
 
-    # ── Menu hierarchy ────────────────────────────────────
+    # ── Menu hierarchy ─────────────────────────────────────
 
     @staticmethod
     def _bbox_area(b: dict) -> float:
@@ -197,86 +211,90 @@ class FoodDetector:
                 return False
             return x1 <= cx <= x2 and y1 <= cy <= y2
 
-        areas      = [cls._bbox_area(d.get("bbox") or {}) for d in detections]
+        areas = [cls._bbox_area(d.get("bbox") or {}) for d in detections]
         parent_idx = [None] * len(detections)
 
         for i, det in enumerate(detections):
             candidates = [
-                j for j in range(len(detections))
+                j
+                for j in range(len(detections))
                 if j != i and areas[j] > areas[i] and contains(detections[j], det)
             ]
             if candidates:
                 parent_idx[i] = min(candidates, key=lambda j: areas[j])
 
         root_indices = [i for i in range(len(detections)) if parent_idx[i] is None]
-        root_indices.sort(key=lambda i: (
-            (detections[i].get("bbox") or {}).get("y1", 0),
-            (detections[i].get("bbox") or {}).get("x1", 0),
-        ))
+        root_indices.sort(
+            key=lambda i: (
+                (detections[i].get("bbox") or {}).get("y1", 0),
+                (detections[i].get("bbox") or {}).get("x1", 0),
+            )
+        )
 
         menus = []
         for ri in root_indices:
-            det      = detections[ri]
+            det = detections[ri]
             children = [j for j in range(len(detections)) if parent_idx[j] == ri]
-            confs    = [det.get("confidence", 0)] + [detections[j].get("confidence", 0) for j in children]
-            menus.append({
-                "name":         det.get("name", ""),
-                "name_th":      det.get("name_th", det.get("name", "")),
-                "name_en":      det.get("name_en", ""),
-                "confidence":   det.get("confidence", 0),
-                "accuracy_avg": round(sum(confs) / len(confs), 3),
-                "price":        det.get("price", 0),
-                "weight":       det.get("weight", 0.0),
-                "ingredients": [
-                    {
-                        "name":       detections[j].get("name", ""),
-                        "name_th":    detections[j].get("name_th", ""),
-                        "name_en":    detections[j].get("name_en", ""),
-                        "confidence": detections[j].get("confidence", 0),
-                        "price":      0,
-                    }
-                    for j in children
-                ],
-            })
+            confs = [det.get("confidence", 0)] + [
+                detections[j].get("confidence", 0) for j in children
+            ]
+            menus.append(
+                {
+                    "name": det.get("name", ""),
+                    "name_th": det.get("name_th", det.get("name", "")),
+                    "name_en": det.get("name_en", ""),
+                    "confidence": det.get("confidence", 0),
+                    "accuracy_avg": round(sum(confs) / len(confs), 3),
+                    "price": det.get("price", 0),
+                    "weight": det.get("weight", 0.0),
+                    "ingredients": [
+                        {
+                            "name": detections[j].get("name", ""),
+                            "name_th": detections[j].get("name_th", ""),
+                            "name_en": detections[j].get("name_en", ""),
+                            "confidence": detections[j].get("confidence", 0),
+                            "price": 0,
+                        }
+                        for j in children
+                    ],
+                }
+            )
         return menus
 
-    # ── Drawing ────────────────────────────────────────────
+    # ── Drawing ─────────────────────────────────────────────
 
     def _draw_box_pil(self, img: Image.Image, det: dict, idx: int) -> None:
         color = BOX_COLORS_RGB[idx % len(BOX_COLORS_RGB)]
-        b     = det["bbox"]
-        draw  = ImageDraw.Draw(img)
+        b = det["bbox"]
+        draw = ImageDraw.Draw(img)
 
-        # วาดกรอบ (5px ตามโค้ดใหม่)
         draw.rectangle(
             [b["x1"], b["y1"], b["x2"], b["y2"]],
             outline=color,
-            width=5,                                      # ← เปลี่ยนจาก 2px เป็น 5px
+            width=5,
         )
 
-        # label text
-        label_text = f"{det['name_th']} {int(det['confidence'] * 100)}%  ฿{det['price']}"
-        text_bbox  = draw.textbbox((b["x1"], b["y1"]), label_text, font=self._font_label)
+        label_text = (
+            f"{det['name_th']} {int(det['confidence'] * 100)}%  ฿{det['price']}"
+        )
+        text_bbox = draw.textbbox((b["x1"], b["y1"]), label_text, font=self._font_label)
         tw = text_bbox[2] - text_bbox[0]
         th = text_bbox[3] - text_bbox[1]
 
-        # วาดพื้นหลัง label
         draw.rectangle(
             [b["x1"], b["y1"] - th - 10, b["x1"] + tw + 10, b["y1"]],
             fill=color,
         )
-
-        # วาดข้อความ (สีขาว ตามโค้ดใหม่)
         draw.text(
             (b["x1"] + 5, b["y1"] - th - 5),
             label_text,
             font=self._font_label,
-            fill=(255, 255, 255),                         # ← เปลี่ยนจากสีดำเป็นสีขาว
+            fill=(255, 255, 255),
         )
 
     @staticmethod
     def _save_annotated_pil(img: Image.Image, original_path: str) -> str:
-        p   = Path(original_path)
+        p = Path(original_path)
         out = p.parent / f"annotated_{p.stem}.jpg"
-        img.save(str(out), "JPEG", quality=95)            # ← เปลี่ยน quality 92 → 95
+        img.save(str(out), "JPEG", quality=95)
         return str(out)

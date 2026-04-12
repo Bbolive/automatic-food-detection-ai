@@ -3,7 +3,7 @@
  */
 "use strict";
 
-/* ── State ────────────────────────────────────────────── */
+/* ── State ─────────────────────────────────────────────── */
 const API_BASE = "";
 const COUNTDOWN_SEC = 5;
 const WEIGHT_POLL_MS = 5000;
@@ -12,10 +12,10 @@ let currentFile = null;
 let lastDetectionResult = null;
 let countdownTimer = null;
 
-// ── เปลี่ยน: ใช้ var เพื่อให้เข้าถึงได้จากทุก scope ──────
+// ใช้ var เพื่อให้เข้าถึงได้จากทุก scope
 var piCapturedFilename = null;
 
-/* ── Helpers ──────────────────────────────────────────── */
+/* ── Helpers ───────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
 const setText = (id, v) => {
   const e = $(id);
@@ -30,7 +30,7 @@ const setHidden = (id, h) => {
   if (e) e.hidden = h;
 };
 
-/* ── Screen navigation ────────────────────────────────── */
+/* ── Screen navigation ─────────────────────────────────── */
 function showScreen(id) {
   document
     .querySelectorAll(".screen")
@@ -41,7 +41,7 @@ function showScreen(id) {
 function goHome() {
   clearTimeout(countdownTimer);
   lastDetectionResult = null;
-  piCapturedFilename = null; // ── เพิ่ม: reset filename
+  piCapturedFilename = null;
   _resetHome();
   showScreen("home-screen");
 }
@@ -86,8 +86,7 @@ function _resetHome() {
   currentFile = null;
   const img = $("preview-img");
   if (img) {
-    // ── เปลี่ยน: คืน live stream แทนการ clear ─────────
-    img.src = "/video_feed";
+    img.src = "/video_feed"; // คืน live stream
     img.hidden = false;
   }
   setHidden("no-image-msg", true);
@@ -96,7 +95,7 @@ function _resetHome() {
   if (fi) fi.value = "";
 }
 
-/* ── Camera status ────────────────────────────────────── */
+/* ── Camera status ─────────────────────────────────────── */
 async function checkStatus() {
   try {
     const d = await _get("/api/status");
@@ -111,7 +110,7 @@ async function checkStatus() {
 }
 checkStatus();
 
-/* ── Weight polling ───────────────────────────────────── */
+/* ── Weight polling ────────────────────────────────────── */
 async function refreshWeight() {
   try {
     const d = await _get("/api/weight");
@@ -124,7 +123,7 @@ async function refreshWeight() {
 refreshWeight();
 setInterval(refreshWeight, WEIGHT_POLL_MS);
 
-/* ── File select / preview ────────────────────────────── */
+/* ── File select / preview ─────────────────────────────── */
 function _onFile(e) {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -148,28 +147,29 @@ function _onFile(e) {
 }
 $("file-input")?.addEventListener("change", _onFile);
 
-/* ── Pi Camera Capture ────────────────────────────────── */
+/* ── Pi Camera Capture ─────────────────────────────────── */
 async function captureFromPi() {
-  console.log("📸 เริ่มสั่งถ่ายภาพ..."); // ── เพิ่ม
-  showLoading(true, "กำลังบันทึกภาพจากกล้อง..."); // ── เปลี่ยน text
-
+  console.log("📸 เริ่มสั่งถ่ายภาพ...");
+  showLoading(true, "กำลังบันทึกภาพจากกล้อง...");
   try {
     const res = await fetch("/api/capture", { method: "POST" });
     const data = await res.json();
 
-    if (!data.success) throw new Error(data.error || "Camera error");
+    if (data.success) {
+      // ← if/else จากโค้ดใหม่
+      const img = $("preview-img");
+      img.src = data.image_url + "?t=" + new Date().getTime();
+      img.hidden = false;
+      setHidden("no-image-msg", true);
 
-    const img = $("preview-img");
-    // ── เพิ่ม cache-bust ด้วย new Date() ─────────────
-    img.src = data.image_url + "?t=" + new Date().getTime();
-    img.hidden = false;
-    setHidden("no-image-msg", true);
+      currentFile = null;
+      piCapturedFilename = data.filename;
 
-    currentFile = null;
-    piCapturedFilename = data.filename; // ── เปลี่ยน: var แทน window.
-
-    console.log("✅ ถ่ายสำเร็จ ไฟล์ชื่อ:", piCapturedFilename); // ── เพิ่ม
-    showToast("📸 ถ่ายภาพสำเร็จ! ตรวจสอบภาพแล้วกดเริ่มตรวจจับ", "success"); // ── เปลี่ยน text
+      console.log("✅ ถ่ายสำเร็จ ไฟล์ชื่อ:", piCapturedFilename);
+      showToast("📸 ถ่ายภาพสำเร็จ! ตรวจสอบภาพแล้วกดเริ่มตรวจจับ", "success");
+    } else {
+      showToast("❌ ถ่ายภาพล้มเหลว: " + (data.error || "Unknown"), "error");
+    }
   } catch (err) {
     console.error("Capture Error:", err);
     showToast("❌ เชื่อมต่อกล้องไม่ได้", "error");
@@ -177,15 +177,14 @@ async function captureFromPi() {
   showLoading(false);
 }
 
-/* ── Detection ────────────────────────────────────────── */
+/* ── Detection ─────────────────────────────────────────── */
 async function startDetection() {
-  console.log("🚀 กำลังส่งภาพไปวิเคราะห์ AI..."); // ── เพิ่ม
+  console.log("🚀 กำลังส่งภาพไปวิเคราะห์ AI...");
 
   const btn = $("detect-btn");
   if (btn) btn.disabled = true;
 
   showLoading(true);
-
   try {
     let res;
 
@@ -206,7 +205,6 @@ async function startDetection() {
 
       /* ===== CASE 3 : ยังไม่มีภาพ ===== */
     } else {
-      // ── เปลี่ยน: ข้อความ error ชัดขึ้น ──────────────
       showToast("⚠️ ต้องถ่ายภาพก่อนเริ่มตรวจจับครับ", "error");
       showLoading(false);
       if (btn) btn.disabled = false;
@@ -234,7 +232,7 @@ async function startDetection() {
   if (btn) btn.disabled = false;
 }
 
-/* ── Render result ────────────────────────────────────── */
+/* ── Render result ─────────────────────────────────────── */
 const CARD_COLORS = [
   { bg: "#6d28d9", border: "#7c3aed" },
   { bg: "#be185d", border: "#db2777" },
@@ -252,9 +250,8 @@ function renderResult(data) {
   }
 
   let dishes = [];
-  if (Array.isArray(data.dishes) && data.dishes.length > 0) {
-    dishes = data.dishes;
-  } else if (Array.isArray(data.menus) && data.menus.length > 0) {
+  if (Array.isArray(data.dishes) && data.dishes.length) dishes = data.dishes;
+  else if (Array.isArray(data.menus) && data.menus.length)
     dishes = data.menus.map((m) => ({
       name_th: m.name_th || m.name,
       name_en: m.name_en || "",
@@ -262,7 +259,7 @@ function renderResult(data) {
       weight: m.weight || 0,
       ingredients: m.ingredients || [],
     }));
-  } else if (Array.isArray(data.detections) && data.detections.length > 0) {
+  else if (Array.isArray(data.detections) && data.detections.length)
     dishes = data.detections.map((d) => ({
       name_th: d.name_th || d.name,
       name_en: d.name_en || "",
@@ -271,7 +268,6 @@ function renderResult(data) {
       confidence: d.confidence || 0,
       ingredients: [],
     }));
-  }
 
   const list = $("menu-list");
   if (!list) {
@@ -337,11 +333,10 @@ function toggleMenuCard(i) {
   if (card) card.classList.toggle("open", !open);
 }
 
-/* ── Countdown ────────────────────────────────────────── */
+/* ── Countdown ─────────────────────────────────────────── */
 function startCountdown(sec) {
   clearTimeout(countdownTimer);
-  // ── circle เป็น null ได้ (HTML ใหม่ใช้ h1 แทน SVG) ──
-  const circle = $("countdown-circle");
+  const circle = $("countdown-circle"); // null ได้ถ้า HTML ใช้ h1 แทน SVG
   const total = 188.5;
   let n = sec;
   (function tick() {
@@ -355,10 +350,9 @@ function startCountdown(sec) {
   })();
 }
 
-/* ── Toast ────────────────────────────────────────────── */
+/* ── Toast ─────────────────────────────────────────────── */
 let _tt = null;
 function showToast(msg, type = "", ms = 3000) {
-  // ── เปลี่ยน: 2600 → 3000
   const el = $("toast");
   if (!el) return;
   clearTimeout(_tt);
@@ -369,7 +363,7 @@ function showToast(msg, type = "", ms = 3000) {
   }, ms);
 }
 
-/* ── Loading ──────────────────────────────────────────── */
+/* ── Loading ───────────────────────────────────────────── */
 function showLoading(show, text = "กำลังวิเคราะห์อาหาร...") {
   const el = $("loading-overlay");
   if (!el) return;
@@ -377,15 +371,14 @@ function showLoading(show, text = "กำลังวิเคราะห์อ
   el.classList.toggle("show", show);
 }
 
-/* ── Fetch helper ─────────────────────────────────────── */
+/* ── Fetch helper ──────────────────────────────────────── */
 async function _get(path) {
   const r = await fetch(API_BASE + path);
   if (!r.ok) throw new Error(`${path} → ${r.status}`);
   return r.json();
 }
 
-/* ── Init ─────────────────────────────────────────────── */
-// ── เพิ่ม: force-show elements และ log พร้อมใช้งาน ──────
+/* ── Init ──────────────────────────────────────────────── */
 window.onload = () => {
   console.log("✅ ระบบหน้าจอพร้อมใช้งาน");
   const uploadRow = $("upload-row");

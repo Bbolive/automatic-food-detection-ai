@@ -12,7 +12,6 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/style.css" />
-    <!-- ── เพิ่ม: style สำหรับ live stream ─────────────── -->
     <style>
       #preview-img {
         width: 100%;
@@ -58,7 +57,6 @@
         <div class="panel panel-left">
           <div class="status-row">
             <span class="status-label">สถานะกล้อง :</span>
-            <!-- ── เปลี่ยน: สถานะเริ่มต้นเป็น "พร้อมใช้งาน" + dot-on ── -->
             <span id="status-camera-text" class="status-value"
               >พร้อมใช้งาน</span
             >
@@ -66,19 +64,18 @@
           </div>
 
           <div class="camera-box" id="camera-box">
-            <!-- ── เปลี่ยน: แสดง live stream แทน no-image-msg ── -->
             <img id="preview-img" src="/video_feed" alt="camera stream" />
             <div id="scan-line"></div>
           </div>
 
-          <!-- ── เปลี่ยน: เหลือปุ่มเดียว + ซ่อน file-input ── -->
+          <!-- ← ตัด btn-capture ออกตามโค้ดใหม่ คงเหลือแค่ btn-upload -->
           <div
             id="upload-row"
             class="upload-row"
             style="display: flex !important; justify-content: center; gap: 10px"
           >
             <button
-              class="btn-upload btn-capture"
+              class="btn-upload"
               onclick="captureFromPi()"
               style="
                 cursor: pointer;
@@ -107,7 +104,6 @@
         <!-- RIGHT: Tips panel -->
         <div class="panel panel-right">
           <h2 class="panel-heading">คำแนะนำสำหรับการใช้งาน</h2>
-          <!-- ── เปลี่ยน: ข้อ 2-3 สอดคล้องกับ flow ใหม่ ── -->
           <ol class="tips-list">
             <li>วางจานอาหารบนเครื่องชั่ง</li>
             <li>ดูภาพสดและกดปุ่ม "ถ่ายภาพ"</li>
@@ -118,7 +114,6 @@
       <!-- /screen-body -->
 
       <div class="action-bar">
-        <!-- ── เปลี่ยน: ข้อความปุ่ม ── -->
         <button
           id="detect-btn"
           class="btn-detect"
@@ -136,14 +131,12 @@
     ═══════════════════════════════════════ -->
     <div id="result-screen" class="screen">
       <div class="title-bar">
-        <!-- ── เปลี่ยน: หัวข้อ result screen ── -->
         <div class="title-main">ผลการวิเคราะห์อาหาร</div>
       </div>
 
       <div class="screen-body">
         <!-- LEFT: Annotated image -->
         <div class="panel panel-left result-left">
-          <!-- ── เปลี่ยน: heading ── -->
           <h2 class="panel-heading">ภาพถ่ายวิเคราะห์</h2>
           <div class="result-img-wrap">
             <img id="result-img" src="" alt="ผลการตรวจจับ" />
@@ -166,7 +159,6 @@
 
       <div class="action-bar action-bar-row">
         <button class="btn-retake" onclick="goHome()">ตรวจจับใหม่</button>
-        <!-- ── เปลี่ยน: ข้อความปุ่ม ── -->
         <button class="btn-confirm" onclick="goToEnd()">
           ยืนยันความถูกต้อง
         </button>
@@ -186,9 +178,9 @@
       <div class="end-center">
         <div class="end-card">
           <p class="end-line-main">เสร็จสิ้นการทำงาน</p>
+          <!-- ← คงข้อความครบ 3 บรรทัดจากโค้ดเก่า -->
           <p class="end-line-sub">ขอบคุณสำหรับการใช้งาน</p>
           <p class="end-line-sub">กำลังกลับสู่หน้าแรก...</p>
-          <!-- ── เปลี่ยน: SVG countdown → h1 ── -->
           <div class="countdown-wrap">
             <h1 id="countdown-num" style="color: #f97316; font-size: 3rem">
               5
@@ -197,6 +189,7 @@
         </div>
       </div>
 
+      <!-- ← คง action-bar จากโค้ดเก่า -->
       <div class="action-bar">
         <button class="btn-return" onclick="goHome()">
           กลับไปหน้าเริ่มต้น
